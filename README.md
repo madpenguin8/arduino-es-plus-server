@@ -2,14 +2,18 @@ arduino-es-plus-server
 ======================
 
 Arduino based server that gives Gardner Denver® air compressors 
-equipped with the ES+® controller ethernet connectivity.
+equipped with the ES+® controller ethernet connectivity for the 
+purpose of remote monitoring. 
 
 Data from the controller is returned as a JSON object containing
 all three requests to the controller, they are:
 
- operating data <STX>oo<ETX>
- operating mode <STX>mm<ETX>
- service data <STX>BB<ETX>
+
+ operating data STX oo ETX
+
+ operating mode STX mm ETX
+
+ service data STX BB ETX
  
  This is an example of the JSON data returned:
  
