@@ -10,7 +10,7 @@
 
 #define DEBUG
 
-// Check for software versions < 2.10
+// Check for ES+ software versions < 2.10
 boolean hasOldVersion = false;
 
 // Request for service data <STX>BB<ETX>
@@ -22,7 +22,7 @@ byte opModeRequest[] = {0x02, 0x6D, 0x6D, 0x03};
 // Request for operating data <STX>oo<ETX>
 byte opRequest[] = {0x02, 0x6F, 0x6F, 0x03};
 
-// Mac Address. Insert your MAC here
+// Mac Address
 byte mac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 // char array sized for the largest data.
@@ -46,14 +46,17 @@ long interval = 330;
 // The request queue
 unsigned int requestIndex = 0;
 
+// Track failed requests
+unsigned int pendingRequests = 0;
+
 // Server for web requests
 EthernetServer server(8080);
 
 // Setup default values for debugging
 #ifdef DEBUG
-	serviceBuf = "0003$08633654#06633654#26633654#26633654#06633654#26633654#06633654#08626630#08626625#08619726$633654#631092$007713#024398#005008#000573#000000#000000#294555#153767#098633#036088#011938#000981$595962#626625$0051738";
-	opModeBuf = "110D";
-	opDataBuf = "066F069E0B3F0A5C0BB";
+serviceBuf = "0003$08633654#06633654#26633654#26633654#06633654#26633654#06633654#08626630#08626625#08619726$633654#631092$007713#024398#005008#000573#000000#000000#294555#153767#098633#036088#011938#000981$595962#626625$0051738";
+opModeBuf = "110D";
+opDataBuf = "066F069E0B3F0A5C0BB";
 #endif
 
 void setup()
@@ -69,6 +72,11 @@ void setup()
 
 void loop() // run over and over
 {
+    // Clear the data if our requests keep failing
+    if (pendingRequests > 4) {
+        clearData();
+    }
+    
 	// Get the current uptime
 	unsigned long currentMillis = millis();
 	
@@ -86,6 +94,7 @@ void loop() // run over and over
 			requestIndex = 0;
 		}
 		controllerRequest();
+        pendingRequests++;
 	}
 	
 	int count = 0;
@@ -128,14 +137,14 @@ void serverLoop()
 					client.print("{\"opdata\": \"");
 					client.write(opDataBuf);
 					client.print("\", \"opmode\": \"");
-
+                    
 					if (hasOldVersion){
-						client.write(opModeBuf[1]);
+						client.write(opModeBuf[0]);
 					}
 					else{
 						client.write(opModeBuf);
 					}
-
+                    
 					client.print("\", \"servicedata\": \"");
 					client.write(serviceBuf);
 					client.println("\"}");
@@ -202,6 +211,7 @@ void responseHandler(int responseSize)
 			//storeServiceData();
 			break;
 	}
+    pendingRequests = 0;
 }
 
 void controllerRequest()
@@ -251,3 +261,9 @@ void storeServiceData()
 	}
 }
 
+void clearData(){
+    serviceBuf = "0000$00000000#00000000#00000000#00000000#00000000#00000000#00000000#00000000#00000000#00000000$000000#000000$000000#000000#000000#000000#000000#000000#000000#000000#000000#000000#000000#000000$000000#000000$0000000";
+	opModeBuf = "0000";
+	opDataBuf = "0000000000000000000";
+    
+}
