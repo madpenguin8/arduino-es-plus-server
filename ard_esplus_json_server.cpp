@@ -7,10 +7,12 @@
 
 #include <Ethernet.h>
 #include <SPI.h>
+#include <avr/wdt.h>
+#include <avr/io.h>
 
 #define DEBUG
 
-// Check for ES+ software versions < 2.10
+// Check for software versions < 2.10
 boolean hasOldVersion = false;
 
 // Request for service data <STX>BB<ETX>
@@ -41,7 +43,7 @@ char opDataBuf[20];
 long previousMillis = 0;
 
 // Timer interval in milliseconds
-long interval = 330;
+long interval = 350;
 
 // The request queue
 unsigned int requestIndex = 0;
@@ -49,15 +51,11 @@ unsigned int requestIndex = 0;
 // Track failed requests
 unsigned int pendingRequests = 0;
 
+// Maximum number of requests before clearing out data
+unsigned int maxRequests = 10;
+
 // Server for web requests
 EthernetServer server(8080);
-
-// Setup default values for debugging
-#ifdef DEBUG
-serviceBuf = "0003$08633654#06633654#26633654#26633654#06633654#26633654#06633654#08626630#08626625#08619726$633654#631092$007713#024398#005008#000573#000000#000000#294555#153767#098633#036088#011938#000981$595962#626625$0051738";
-opModeBuf = "110D";
-opDataBuf = "066F069E0B3F0A5C0BB";
-#endif
 
 void setup()
 {
@@ -65,15 +63,25 @@ void setup()
 	Serial.begin(9600);
 	// Set serial port to 7n1
 	UCSR0C = B00000100;
+    
 	// Setup networking
 	Ethernet.begin(mac);
 	server.begin();
+    
+    // Setup default return values
+    clearData();
+    
+    // Last thing we do is enable the watchdog timer
+    wdt_enable(WDTO_8S);
 }
 
 void loop() // run over and over
 {
+    // First thing we do is reset the watchdog
+    wdt_reset();
+    
     // Clear the data if our requests keep failing
-    if (pendingRequests > 4) {
+    if (pendingRequests > maxRequests) {
         clearData();
     }
     
@@ -120,6 +128,8 @@ void serverLoop()
 	// listen for incoming clients
 	EthernetClient client = server.available();
 	if (client){
+        // Reset the watchdog before data transfer
+        wdt_reset();
 		// an http request ends with a blank line
 		boolean currentLineIsBlank = true;
 		while (client.connected()){
@@ -161,6 +171,8 @@ void serverLoop()
 				}
 			}
 		}
+        // Reset the watchdog after data transfer
+        wdt_reset();
 		// give the web browser time to receive the data
 		delay(1);
 		// close the connection:
@@ -192,6 +204,7 @@ void requestOperatingData()
 	requestIndex++;
 }
 
+
 void responseHandler(int responseSize)
 {
 	switch (responseSize){
@@ -207,9 +220,8 @@ void responseHandler(int responseSize)
 		case 216:
 			storeServiceData();
 			break;
-		default:
-			//storeServiceData();
-			break;
+		default:// Junk data does not reset the counter
+			return;
 	}
     pendingRequests = 0;
 }
@@ -261,9 +273,28 @@ void storeServiceData()
 	}
 }
 
+// Clear out data
 void clearData(){
-    serviceBuf = "0000$00000000#00000000#00000000#00000000#00000000#00000000#00000000#00000000#00000000#00000000$000000#000000$000000#000000#000000#000000#000000#000000#000000#000000#000000#000000#000000#000000$000000#000000$0000000";
-	opModeBuf = "0000";
-	opDataBuf = "0000000000000000000";
+    
+    // Setup some default values for debugging
+#ifdef DEBUG
+    strncpy(serviceBuf, "0003$08633654#06633654#26633654"
+            "#26633654#06633654#26633654#06633654#08626630"
+            "#08626625#08619726$633654#631092$007713#024398"
+            "#005008#000573#000000#000000#294555#153767#098633"
+            "#036088#011938#000981$595962#626625$0051738", 215);
+	strncpy(opModeBuf, "110D", 5);
+	strncpy(opDataBuf, "066F069E0B3F0A5C0BB", 20);
+#else
+    // Zero out all data
+    strncpy(serviceBuf, "0000$00000000#00000000#00000000"
+            "#00000000#00000000#00000000#00000000#00000000"
+            "#00000000#00000000$000000#000000$000000#000000"
+            "#000000#000000#000000#000000#000000#000000#000000"
+            "#000000#000000#000000$000000#000000$0000000", 215);
+	strncpy(opModeBuf, "0000", 5);
+	strncpy(opDataBuf, "0000000000000000000", 20);
+    
+#endif
     
 }
